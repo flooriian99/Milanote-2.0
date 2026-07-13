@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pinnwand</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --paper: #EEF1EE;
+    --paper-dot: #CFD8D2;
+    --ink: #232823;
+    --ink-soft: #5C665F;
+    --card-bg: #FFFFFF;
+    --accent: #2F6E68;
+    --accent-soft: #DCEAE7;
+    --accent-2: #C98A3B;
+    --danger: #B5533C;
+    --sidebar-bg: #1B2422;
+    --sidebar-bg-2: #232F2C;
+    --sidebar-text: #E4EAE6;
+    --sidebar-text-dim: #93A39B;
+    --radius: 12px;
+    --shadow: 0 6px 18px rgba(20, 30, 26, 0.14);
+    --shadow-lift: 0 14px 34px rgba(20, 30, 26, 0.24);
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-note: 'Caveat', cursive;
+    --font-display: 'Fraunces', serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:var(--font-ui);
+    color:var(--ink);
+    display:flex;
+    height:100vh;
+    overflow:hidden;
+    background:var(--sidebar-bg);
+  }
+  button{font-family:var(--font-ui);cursor:pointer;}
+  button:focus-visible, [contenteditable]:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent-2);
+    outline-offset: 2px;
+  }
+
+  /* Sidebar */
+  #sidebar{
+    width:240px;
+    min-width:240px;
+    background:linear-gradient(180deg, var(--sidebar-bg), var(--sidebar-bg-2));
+    color:var(--sidebar-text);
+    display:flex;
+    flex-direction:column;
+    padding:18px 14px;
+    gap:14px;
+  }
+  #sidebar h1{
+    font-family:var(--font-display);
+    font-size:20px;
+    font-weight:600;
+    margin:4px 6px 0;
+    letter-spacing:0.2px;
+  }
+  #newBoardBtn{
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:14px;
+    font-weight:600;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    transition:background .15s ease;
+  }
+  #newBoardBtn:hover{background:#3a827b;}
+  #boardList{
+    list-style:none;
+    margin:0;
+    padding:0;
+    overflow-y:auto;
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+  }
+  .board-item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 10px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:14px;
+    color:var(--sidebar-text-dim);
+    transition:background .12s ease, color .12s ease;
+  }
+  .board-item:hover{background:rgba(255,255,255,0.06);color:var(--sidebar-text);}
+  .board-item.active{background:rgba(255,255,255,0.1);color:#fff;font-weight:600;}
+  .board-item .dot{width:6px;height:6px;border-radius:50%;background:var(--accent-2);flex-shrink:0;}
+  .board-item .name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .board-item .del{
+    opacity:0;
+    background:none;border:none;color:var(--sidebar-text-dim);
+    font-size:15px;padding:2px 4px;border-radius:4px;
+  }
+  .board-item:hover .del{opacity:1;}
+  .board-item .del:hover{color:var(--danger);}
+  #sidebarFooter{
+    font-size:11.5px;
+    color:var(--sidebar-text-dim);
+    padding:8px 6px 0;
+    border-top:1px solid rgba(255,255,255,0.08);
+    line-height:1.4;
+  }
+
+  /* Main area */
+  #main{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    background:var(--paper);
+    min-width:0;
+  }
+  #breadcrumb{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 20px 0;
+    font-size:12.5px;
+    color:var(--ink-soft);
+  }
+  #breadcrumb span.crumb{cursor:pointer;}
+  #breadcrumb span.crumb:hover{color:var(--accent);text-decoration:underline;}
+  #breadcrumb.hidden{display:none;}
+
+  #toolbar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 20px 12px;
+    background:var(--card-bg);
+    border-bottom:1px solid #E1E6E2;
+    flex-wrap:wrap;
+  }
+  #boardTitle{
+    font-family:var(--font-display);
+    font-size:20px;
+    font-weight:600;
+    padding:4px 8px;
+    border-radius:6px;
+    min-width:60px;
+  }
+  #boardTitle:hover, #boardTitle:focus{background:var(--accent-soft);outline:none;}
+  .toolbar-spacer{flex:1;}
+  #searchInput{
+    border:1px solid #DDE4DF;
+    border-radius:8px;
+    padding:8px 12px;
+    font-size:13px;
+    width:170px;
+    background:var(--paper);
+  }
+  #searchInput:focus{outline:2px solid var(--accent-2);}
+  .tool-btn{
+    background:var(--paper);
+    border:1px solid #DDE4DF;
+    color:var(--ink);
+    border-radius:8px;
+    padding:8px 12px;
+    font-size:13px;
+    font-weight:500;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    transition:all .12s ease;
+    white-space:nowrap;
+  }
+  .tool-btn:hover{background:var(--accent-soft);border-color:var(--accent);}
+  .tool-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .zoom-group{
+    display:flex;
+    align-items:center;
+    gap:2px;
+    background:var(--paper);
+    border:1px solid #DDE4DF;
+    border-radius:8px;
+    padding:3px;
+  }
+  .zoom-group button{
+    background:none;border:none;width:28px;height:28px;border-radius:6px;font-size:15px;color:var(--ink-soft);
+  }
+  .zoom-group button:hover{background:var(--accent-soft);color:var(--ink);}
+  .zoom-group span{font-size:12.5px;color:var(--ink-soft);width:42px;text-align:center;}
+
+  #connectHint{
+    position:absolute;
+    top:10px;left:50%;
+    transform:translateX(-50%);
+    background:var(--ink);
+    color:#fff;
+    padding:7px 16px;
+    border-radius:20px;
+    font-size:12.5px;
+    z-index:80;
+    box-shadow:var(--shadow);
+    display:none;
+  }
+  #connectHint.show{display:block;}
+
+  #canvasWrap{
+    flex:1;
+    overflow:auto;
+    position:relative;
+    background:
+      radial-gradient(var(--paper-dot) 1.3px, transparent 1.3px);
+    background-size:24px 24px;
+  }
+  #canvas{
+    width:4200px;
+    height:3000px;
+    position:relative;
+    transform-origin:0 0;
+  }
+  #connectionsSvg{
+    position:absolute;
+    top:0;left:0;
+    width:100%;
+    height:100%;
+    pointer-events:none;
+    overflow:visible;
+  }
+  #connectionsSvg line{
+    pointer-events:stroke;
+    cursor:pointer;
+  }
+  #emptyHint{
+    position:absolute;
+    top:120px;left:60px;
+    font-family:var(--font-note);
+    font-size:26px;
+    color:var(--ink-soft);
+    max-width:360px;
+    pointer-events:none;
+  }
+
+  /* Cards */
+  .card{
+    position:absolute;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    user-select:none;
+    transition:box-shadow .15s ease, opacity .15s ease;
+  }
+  .card.dragging{
+    box-shadow:var(--shadow-lift);
+    z-index:50;
+    transition:none;
+    cursor:grabbing;
+  }
+  .card.dimmed{opacity:.25;}
+  .card.connect-target{outline:3px solid var(--accent-2);}
+  .card-head{
+    height:20px;
+    cursor:grab;
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    padding:0 6px;
+  }
+  .card-head .pin{
+    position:absolute;
+    top:-7px;left:50%;
+    transform:translateX(-50%);
+    width:14px;height:14px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #fff6, transparent 55%), var(--accent-2);
+    box-shadow:0 2px 3px rgba(0,0,0,0.25);
+  }
+  .card-delete{
+    background:none;border:none;
+    font-size:14px;
+    color:rgba(0,0,0,0.28);
+    padding:0 3px;
+    line-height:1;
+    border-radius:4px;
+  }
+  .card-delete:hover{color:var(--danger);background:rgba(0,0,0,0.06);}
+
+  /* Note card */
+  .card.note{
+    width:200px;
+    min-height:170px;
+    padding:20px 14px 14px;
+    font-family:var(--font-note);
+    font-size:21px;
+    line-height:1.25;
+    color:#2b2a22;
+  }
+  .card.note .card-head{position:absolute;top:0;left:0;right:0;}
+  .note-toolbar{
+    display:flex;
+    gap:3px;
+    margin-bottom:6px;
+    font-family:var(--font-ui);
+  }
+  .note-toolbar button{
+    background:rgba(0,0,0,0.06);
+    border:none;
+    width:22px;height:20px;
+    border-radius:4px;
+    font-size:11.5px;
+    font-weight:700;
+    color:#3a3a2e;
+  }
+  .note-toolbar button:hover{background:rgba(0,0,0,0.12);}
+  .note-body{
+    outline:none;
+    min-height:95px;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .note-body:empty:before{
+    content:"Schreib etwas...";
+    color:rgba(0,0,0,0.35);
+  }
+  .color-row{
+    position:absolute;
+    bottom:8px; left:14px;
+    display:flex;
+    gap:5px;
+  }
+  .color-dot{
+    width:13px;height:13px;border-radius:50%;
+    border:1px solid rgba(0,0,0,0.15);
+  }
+
+  /* Link card */
+  .card.link{
+    width:230px;
+    background:var(--card-bg);
+    border:1px solid #E1E6E2;
+    font-family:var(--font-ui);
+  }
+  .card.link .card-head{background:transparent;}
+  .link-body{padding:2px 14px 14px;}
+  .link-title{
+    font-weight:600;
+    font-size:14.5px;
+    outline:none;
+    margin-bottom:6px;
+    word-break:break-word;
+  }
+  .link-title:empty:before{content:"Titel";color:var(--ink-soft);}
+  .link-url-input{
+    width:100%;
+    border:1px solid #E1E6E2;
+    border-radius:6px;
+    padding:6px 8px;
+    font-size:12.5px;
+    color:var(--accent);
+    margin-bottom:8px;
+    font-family:var(--font-ui);
+  }
+  .link-open{
+    font-size:12.5px;
+    color:var(--accent);
+    text-decoration:none;
+    font-weight:600;
+  }
+  .link-open:hover{text-decoration:underline;}
+
+  /* Image card */
+  .card.image{
+    width:240px;
+    background:var(--card-bg);
+    border:1px solid #E1E6E2;
+    overflow:hidden;
+  }
+  .card.image .card-head{background:rgba(255,255,255,0.85);position:absolute;top:0;left:0;right:0;z-index:2;}
+  .image-body{padding:26px 10px 10px;}
+  .image-body img{
+    width:100%;
+    display:block;
+    border-radius:6px;
+    background:var(--paper);
+    min-height:60px;
+  }
+  .image-url-input{
+    width:100%;
+    border:1px solid #E1E6E2;
+    border-radius:6px;
+    padding:6px 8px;
+    font-size:12px;
+    margin-top:8px;
+    font-family:var(--font-ui);
+  }
+  .image-placeholder{
+    display:flex;align-items:center;justify-content:center;
+    height:100px;color:var(--ink-soft);font-size:12.5px;
+    background:var(--paper);border-radius:6px;text-align:center;padding:8px;
+  }
+
+  /* Todo card */
+  .card.todo{
+    width:230px;
+    background:var(--card-bg);
+    border:1px solid #E1E6E2;
+    font-family:var(--font-ui);
+  }
+  .card.todo .card-head{background:transparent;}
+  .todo-body{padding:2px 14px 12px;}
+  .todo-title{
+    font-weight:600;
+    font-size:14.5px;
+    outline:none;
+    margin-bottom:8px;
+    word-break:break-word;
+  }
+  .todo-title:empty:before{content:"Liste betiteln";color:var(--ink-soft);}
+  .todo-item{
+    display:flex;
+    align-items:flex-start;
+    gap:7px;
+    margin-bottom:6px;
+    font-size:13.5px;
+  }
+  .todo-item input[type=checkbox]{margin-top:3px;accent-color:var(--accent);}
+  .todo-item .item-text{
+    flex:1;
+    outline:none;
+    word-break:break-word;
+  }
+  .todo-item.done .item-text{text-decoration:line-through;color:var(--ink-soft);}
+  .todo-item .item-del{
+    background:none;border:none;color:rgba(0,0,0,0.2);font-size:12px;padding:0 2px;
+  }
+  .todo-item .item-del:hover{color:var(--danger);}
+  .todo-add{
+    font-size:12.5px;
+    color:var(--accent);
+    background:none;
+    border:none;
+    padding:2px 0;
+    font-weight:600;
+  }
+  .todo-add:hover{text-decoration:underline;}
+
+  /* Board (nested) card */
+  .card.board-card{
+    width:210px;
+    background:linear-gradient(135deg, var(--accent-soft), #fff);
+    border:1px solid #CFE1DC;
+    font-family:var(--font-ui);
+  }
+  .card.board-card .card-head{background:transparent;}
+  .board-card-body{
+    padding:6px 14px 18px;
+    cursor:pointer;
+  }
+  .board-card-icon{font-size:26px;margin-bottom:4px;}
+  .board-card-title{
+    font-weight:600;
+    font-size:14.5px;
+    outline:none;
+    word-break:break-word;
+  }
+  .board-card-title:empty:before{content:"Unterboard";color:var(--ink-soft);}
+  .board-card-sub{font-size:11.5px;color:var(--ink-soft);margin-top:2px;}
+
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:#c7d0ca;border-radius:6px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+
+  @media (max-width: 720px){
+    #sidebar{position:absolute;z-index:100;height:100%;box-shadow:var(--shadow-lift);transform:translateX(-100%);transition:transform .2s ease;}
+    #sidebar.open{transform:translateX(0);}
+    #sidebarToggle{display:flex !important;}
+    #searchInput{width:110px;}
+  }
+  #sidebarToggle{display:none;}
+</style>
+</head>
+<body>
+
+<nav id="sidebar">
+  <h1>📌 Pinnwand</h1>
+  <button id="newBoardBtn">+ Neues Board</button>
+  <ul id="boardList"></ul>
+  <div style="display:flex;gap:6px;">
+    <button id="exportDataBtn" class="tool-btn" style="flex:1;background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.15);color:var(--sidebar-text);">⬇️ Sichern</button>
+    <button id="importDataBtn" class="tool-btn" style="flex:1;background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.15);color:var(--sidebar-text);">⬆️ Laden</button>
+    <input id="importFileInput" type="file" accept="application/json" style="display:none;">
+  </div>
+  <div id="driveSection" style="margin-top:2px;">
+    <button id="driveConnectBtn" class="tool-btn" style="width:100%;background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.15);color:var(--sidebar-text);">☁️ Mit Google Drive verbinden</button>
+    <div id="driveStatus" style="font-size:11px;color:var(--sidebar-text-dim);margin-top:5px;line-height:1.4;"></div>
+  </div>
+  <div id="sidebarFooter">
+    <span id="storageModeLabel"></span><br>
+    Unterboards erscheinen nicht hier — öffne sie über ihre Karte. Regelmässig „Sichern" klicken für eine Backup-Datei.
+  </div>
+</nav>
+
+<main id="main">
+  <div id="breadcrumb" class="hidden"></div>
+  <div id="toolbar">
+    <button id="sidebarToggle" class="tool-btn">☰</button>
+    <div id="boardTitle" contenteditable="true" spellcheck="false"></div>
+    <input id="searchInput" type="text" placeholder="Suchen...">
+    <div class="toolbar-spacer"></div>
+    <button class="tool-btn" id="addNoteBtn">🗒️ Notiz</button>
+    <button class="tool-btn" id="addTodoBtn">☑️ Liste</button>
+    <button class="tool-btn" id="addLinkBtn">🔗 Link</button>
+    <button class="tool-btn" id="addImageBtn">🖼️ Bild</button>
+    <button class="tool-btn" id="addBoardBtn">🗂️ Unterboard</button>
+    <button class="tool-btn" id="connectBtn">⤳ Verbinden</button>
+    <button class="tool-btn" id="exportBtn">⬇️ Export</button>
+    <div class="zoom-group">
+      <button id="zoomOut">−</button>
+      <span id="zoomLevel">100%</span>
+      <button id="zoomIn">+</button>
+    </div>
+  </div>
+  <div id="canvasWrap">
+    <div id="connectHint">Wähle die zweite Karte aus, um sie zu verbinden — oder „Verbinden“ erneut klicken zum Abbrechen.</div>
+    <div id="canvas">
+      <svg id="connectionsSvg">
+        <defs>
+          <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#8FA39C"></path>
+          </marker>
+        </defs>
+      </svg>
+      <div id="emptyHint">Leer hier. Klick oben auf „Notiz“, „Liste“, „Link“, „Bild“ oder „Unterboard“, um loszulegen.</div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function(){
+  const NOTE_COLORS = ['#F5E1A4','#F7C6C2','#BFE3D0','#C9D8F0','#E7D4F0'];
+
+  // ===== Google Drive Sync – Konfiguration =====
+  // Hier deine eigene OAuth-Client-ID eintragen (siehe Einrichtungsanleitung).
+  // Ohne Client-ID bleibt die Drive-Anbindung deaktiviert, alles andere
+  // funktioniert wie gehabt (lokal / Claude-Speicher).
+  const GOOGLE_CLIENT_ID = ''; // z.B. '123456789-abc123.apps.googleusercontent.com'
+  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  const DRIVE_FILENAME = 'pinnwand-daten.json';
+
+  let boards = [];
+  let currentBoardId = null;
+  let boardStack = [];
+  let cards = [];
+  let connections = [];
+  let zoom = 1;
+  let saveTimer = null;
+  let connectMode = false;
+  let connectFirstId = null;
+  let searchTerm = '';
+
+  const boardListEl = document.getElementById('boardList');
+  const boardTitleEl = document.getElementById('boardTitle');
+  const canvasEl = document.getElementById('canvas');
+  const canvasWrapEl = document.getElementById('canvasWrap');
+  const emptyHintEl = document.getElementById('emptyHint');
+  const svgEl = document.getElementById('connectionsSvg');
+  const breadcrumbEl = document.getElementById('breadcrumb');
+  const connectHintEl = document.getElementById('connectHint');
+  const searchInputEl = document.getElementById('searchInput');
+
+  function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+  // Uses Claude's in-chat storage when available (window.storage), otherwise
+  // falls back to the browser's own localStorage — this makes the file work
+  // both inside a Claude conversation and as a plain double-clicked HTML file.
+  const hasClaudeStorage = (typeof window.storage !== 'undefined');
+  let storageMode = hasClaudeStorage ? 'claude' : 'local';
+
+  async function safeGet(key){
+    if(storageMode === 'claude'){
+      try{ const r = await window.storage.get(key, false); return r ? r.value : null; }
+      catch(e){ return null; }
+    }
+    try{ return localStorage.getItem('pinnwand:'+key); }
+    catch(e){ return null; }
+  }
+  async function safeSet(key, value, skipDrivePush){
+    if(storageMode === 'claude'){
+      try{ await window.storage.set(key, value, false); }
+      catch(e){ console.error('Speicherfehler', e); }
+    } else {
+      try{ localStorage.setItem('pinnwand:'+key, value); }
+      catch(e){ console.error('Speicherfehler (localStorage)', e); alert('Speichern fehlgeschlagen. Nutze „Sichern" um eine Backup-Datei herunterzuladen.'); }
+    }
+    if(!skipDrivePush) scheduleDrivePush();
+  }
+  async function safeDelete(key){
+    if(storageMode === 'claude'){
+      try{ await window.storage.delete(key, false); }catch(e){ /* ignore */ }
+    } else {
+      try{ localStorage.removeItem('pinnwand:'+key); }catch(e){ /* ignore */ }
+    }
+    scheduleDrivePush();
+  }
+
+  // Sammelt den kompletten App-Zustand (alle Boards + Karten) als ein Objekt.
+  // Wird sowohl fürs manuelle Backup als auch für den Google-Drive-Sync genutzt.
+  async function gatherFullState(){
+    const data = { boards, boardData: {}, updatedAt: Date.now() };
+    for(const b of boards){
+      const raw = await safeGet('board-data:'+b.id);
+      data.boardData[b.id] = raw ? JSON.parse(raw) : {cards:[], connections:[]};
+    }
+    return data;
+  }
+
+  // Schreibt einen kompletten App-Zustand (z.B. von Google Drive oder aus einer
+  // Backup-Datei) zurück in den lokalen Speicher und aktualisiert die Ansicht.
+  // skipDrivePush=true verhindert, dass ein gerade heruntergeladener Drive-Stand
+  // sofort wieder zurückgeschrieben wird (Endlosschleife).
+  async function applyFullState(data, skipDrivePush){
+    if(!data || !data.boards || !data.boardData) throw new Error('invalid');
+    boards = data.boards;
+    await safeSet('boards', JSON.stringify(boards), skipDrivePush);
+    for(const id in data.boardData){
+      await safeSet('board-data:'+id, JSON.stringify(data.boardData[id]), skipDrivePush);
+    }
+    if(boards.length){
+      const top = boards.find(b => b.parentId == null) || boards[0];
+      boardStack = [top.id];
+    }
+    renderBoardList();
+    if(boardStack[0]) switchBoard(boardStack[0]);
+  }
+
+  // ===== Google Drive Sync =====
+  // Speichert den gesamten App-Zustand als eine JSON-Datei ("pinnwand-daten.json")
+  // im Google Drive des Nutzers. Über den Scope "drive.file" sieht die App NUR
+  // diese eine, selbst erstellte Datei — nicht den Rest des Drives.
+  let driveTokenClient = null;
+  let driveAccessToken = null;
+  let driveFileId = localStorage.getItem('pinnwand:driveFileId') || null;
+  let driveConnected = false;
+  let drivePushTimer = null;
+
+  function setDriveStatus(text){
+    const el = document.getElementById('driveStatus');
+    if(el) el.textContent = text;
+  }
+
+  function updateDriveConnectBtn(){
+    const btn = document.getElementById('driveConnectBtn');
+    if(!btn) return;
+    btn.textContent = driveConnected ? '☁️ Verbunden — trennen' : '☁️ Mit Google Drive verbinden';
+  }
+
+  async function driveApiFetch(url, options){
+    options = options || {};
+    options.headers = Object.assign({}, options.headers, { Authorization: 'Bearer ' + driveAccessToken });
+    const res = await fetch(url, options);
+    if(res.status === 401){ throw new Error('drive-unauthorized'); }
+    if(!res.ok){ throw new Error('drive-http-' + res.status); }
+    return res;
+  }
+
+  async function driveFindFile(){
+    const q = encodeURIComponent(`name='${DRIVE_FILENAME}' and trashed=false`);
+    const res = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&spaces=drive`);
+    const json = await res.json();
+    return (json.files && json.files.length) ? json.files[0].id : null;
+  }
+
+  async function driveDownload(fileId){
+    const res = await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+    return res.json();
+  }
+
+  async function driveCreateFile(data){
+    const boundary = 'pinnwand_boundary_' + uid();
+    const metadata = { name: DRIVE_FILENAME, mimeType: 'application/json' };
+    const body =
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+      `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(data)}\r\n` +
+      `--${boundary}--`;
+    const res = await driveApiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body
+    });
+    const json = await res.json();
+    return json.id;
+  }
+
+  async function driveUpdateFile(fileId, data){
+    await driveApiFetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  }
+
+  function scheduleDrivePush(){
+    if(!driveConnected) return;
+    clearTimeout(drivePushTimer);
+    drivePushTimer = setTimeout(pushToDrive, 1500);
+  }
+
+  async function pushToDrive(){
+    if(!driveConnected) return;
+    try{
+      setDriveStatus('Synchronisiere …');
+      const data = await gatherFullState();
+      if(!driveFileId){ driveFileId = await driveFindFile(); }
+      if(driveFileId){
+        await driveUpdateFile(driveFileId, data);
+      } else {
+        driveFileId = await driveCreateFile(data);
+      }
+      localStorage.setItem('pinnwand:driveFileId', driveFileId);
+      setDriveStatus('Zuletzt synchronisiert: ' + new Date().toLocaleTimeString('de-CH', {hour:'2-digit', minute:'2-digit'}));
+    }catch(e){
+      console.error('Drive-Push fehlgeschlagen', e);
+      setDriveStatus('Sync-Fehler. Erneut „Verbinden" versuchen.');
+    }
+  }
+
+  async function pullFromDrive(){
+    try{
+      setDriveStatus('Lade von Google Drive …');
+      if(!driveFileId){ driveFileId = await driveFindFile(); }
+      if(driveFileId){
+        localStorage.setItem('pinnwand:driveFileId', driveFileId);
+        const data = await driveDownload(driveFileId);
+        // skipDrivePush=true: gerade heruntergeladenen Stand nicht sofort
+        // wieder hochladen — sonst Endlosschleife.
+        await applyFullState(data, true);
+        setDriveStatus('Aktueller Stand von Google Drive geladen.');
+      } else {
+        // Noch keine Datei auf Drive -> aktuellen lokalen Stand hochladen.
+        await pushToDrive();
+      }
+    }catch(e){
+      console.error('Drive-Pull fehlgeschlagen', e);
+      setDriveStatus('Laden von Drive fehlgeschlagen. Erneut versuchen.');
+    }
+  }
+
+  function initDrive(){
+    if(!GOOGLE_CLIENT_ID){
+      setDriveStatus('Keine Client-ID hinterlegt — siehe Einrichtungsanleitung.');
+      const btn = document.getElementById('driveConnectBtn');
+      if(btn) btn.disabled = true;
+      return;
+    }
+    // Das Google-Skript lädt async — falls es noch nicht bereit ist, kurz warten.
+    if(typeof google === 'undefined' || !google.accounts){
+      setTimeout(initDrive, 200);
+      return;
+    }
+    driveTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      callback: async (resp) => {
+        if(resp.error){
+          setDriveStatus('Verbindung abgelehnt oder abgebrochen.');
+          return;
+        }
+        driveAccessToken = resp.access_token;
+        driveConnected = true;
+        updateDriveConnectBtn();
+        await pullFromDrive();
+      }
+    });
+  }
+
+  function connectDrive(){
+    if(!driveTokenClient){ setDriveStatus('Drive-Anbindung noch nicht bereit — kurz warten und erneut klicken.'); return; }
+    driveTokenClient.requestAccessToken({ prompt: driveAccessToken ? '' : 'consent' });
+  }
+
+  function disconnectDrive(){
+    driveConnected = false;
+    driveAccessToken = null;
+    updateDriveConnectBtn();
+    setDriveStatus('Getrennt. Änderungen werden nur noch lokal gespeichert.');
+  }
+
+  async function exportAllData(){
+    const data = await gatherFullState();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const link = document.createElement('a');
+    link.download = 'pinnwand-backup.json';
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+  }
+
+  async function importAllData(file){
+    try{
+      const text = await file.text();
+      const data = JSON.parse(text);
+      await applyFullState(data);
+      alert('Backup geladen.');
+    }catch(e){
+      alert('Diese Datei konnte nicht gelesen werden.');
+    }
+  }
+
+  async function loadBoards(){
+    const raw = await safeGet('boards');
+    if(raw){ try{ boards = JSON.parse(raw); }catch(e){ boards = []; } }
+    if(!boards || boards.length === 0){
+      const id = uid();
+      boards = [{id, name:'Mein erstes Board', createdAt: Date.now(), parentId: null}];
+      await safeSet('boards', JSON.stringify(boards));
+      await safeSet('board-data:'+id, JSON.stringify({cards:[], connections:[]}));
+    }
+    renderBoardList();
+    boardStack = [boards.find(b => b.parentId == null).id];
+    switchBoard(boardStack[0]);
+  }
+
+  function topLevelBoards(){ return boards.filter(b => !b.parentId); }
+
+  function renderBoardList(){
+    boardListEl.innerHTML = '';
+    topLevelBoards().forEach(b => {
+      const li = document.createElement('li');
+      li.className = 'board-item' + (b.id === boardStack[0] ? ' active' : '');
+      li.innerHTML = `<span class="dot"></span><span class="name">${escapeHtml(b.name)}</span><button class="del" title="Board löschen">✕</button>`;
+      li.addEventListener('click', (e) => {
+        if(e.target.classList.contains('del')) return;
+        boardStack = [b.id];
+        switchBoard(b.id);
+      });
+      li.querySelector('.del').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if(topLevelBoards().length === 1){ alert('Das letzte Board kann nicht gelöscht werden.'); return; }
+        if(!confirm(`Board "${b.name}" (inkl. aller Unterboards) wirklich löschen?`)) return;
+        await deleteBoardAndChildren(b.id);
+        if(boardStack[0] === b.id){ boardStack = [topLevelBoards()[0].id]; }
+        switchBoard(boardStack[0]);
+      });
+      boardListEl.appendChild(li);
+    });
+  }
+
+  async function deleteBoardAndChildren(id){
+    const children = boards.filter(b => b.parentId === id);
+    for(const c of children){ await deleteBoardAndChildren(c.id); }
+    boards = boards.filter(b => b.id !== id);
+    await safeSet('boards', JSON.stringify(boards));
+    await safeDelete('board-data:'+id);
+  }
+
+  async function switchBoard(id){
+    currentBoardId = id;
+    const board = boards.find(b => b.id === id);
+    boardTitleEl.textContent = board ? board.name : '';
+    const raw = await safeGet('board-data:'+id);
+    let data = { cards: [], connections: [] };
+    if(raw){ try{ data = JSON.parse(raw); }catch(e){} }
+    cards = data.cards || [];
+    connections = data.connections || [];
+    zoom = 1;
+    connectMode = false; connectFirstId = null;
+    updateConnectUI();
+    updateZoomUI();
+    renderBoardList();
+    renderBreadcrumb();
+    searchInputEl.value = '';
+    searchTerm = '';
+    renderAll();
+  }
+
+  function renderBreadcrumb(){
+    if(boardStack.length <= 1){ breadcrumbEl.classList.add('hidden'); breadcrumbEl.innerHTML=''; return; }
+    breadcrumbEl.classList.remove('hidden');
+    breadcrumbEl.innerHTML = boardStack.map((id, i) => {
+      const b = boards.find(x => x.id === id);
+      const name = b ? escapeHtml(b.name) : '?';
+      const sep = i < boardStack.length - 1 ? ' <span>›</span> ' : '';
+      return `<span class="crumb" data-idx="${i}">${name}</span>${sep}`;
+    }).join('');
+    breadcrumbEl.querySelectorAll('.crumb').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = +el.dataset.idx;
+        boardStack = boardStack.slice(0, idx+1);
+        switchBoard(boardStack[boardStack.length-1]);
+      });
+    });
+  }
+
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+
+  function scheduleSave(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      await safeSet('board-data:'+currentBoardId, JSON.stringify({cards, connections}));
+    }, 400);
+  }
+
+  async function renameBoard(newName){
+    const board = boards.find(b => b.id === currentBoardId);
+    if(!board) return;
+    board.name = newName.trim() || 'Unbenanntes Board';
+    await safeSet('boards', JSON.stringify(boards));
+    renderBoardList();
+    renderBreadcrumb();
+  }
+
+  boardTitleEl.addEventListener('blur', () => renameBoard(boardTitleEl.textContent));
+  boardTitleEl.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){ e.preventDefault(); boardTitleEl.blur(); }
+  });
+
+  document.getElementById('newBoardBtn').addEventListener('click', async () => {
+    const id = uid();
+    boards.push({id, name:'Neues Board', createdAt: Date.now(), parentId: null});
+    await safeSet('boards', JSON.stringify(boards));
+    await safeSet('board-data:'+id, JSON.stringify({cards:[], connections:[]}));
+    boardStack = [id];
+    switchBoard(id);
+    setTimeout(() => { boardTitleEl.focus(); document.execCommand('selectAll', false, null); }, 50);
+  });
+
+  searchInputEl.addEventListener('input', () => {
+    searchTerm = searchInputEl.value.trim().toLowerCase();
+    renderCards();
+  });
+
+  function viewportCenterOnCanvas(){
+    const wrapRect = canvasWrapEl.getBoundingClientRect();
+    const x = (canvasWrapEl.scrollLeft + wrapRect.width/2) / zoom - 100;
+    const y = (canvasWrapEl.scrollTop + wrapRect.height/2) / zoom - 80;
+    return { x: Math.max(20,x) + (Math.random()*40-20), y: Math.max(20,y) + (Math.random()*40-20) };
+  }
+
+  async function addCard(type){
+    const pos = viewportCenterOnCanvas();
+    const base = { id: uid(), type, x: pos.x, y: pos.y, rotation: type==='note' ? (Math.random()*6 - 3).toFixed(1) : 0 };
+    let card;
+    if(type === 'note'){
+      card = Object.assign(base, { content:'', color: NOTE_COLORS[Math.floor(Math.random()*NOTE_COLORS.length)] });
+    } else if(type === 'link'){
+      card = Object.assign(base, { title:'', url:'' });
+    } else if(type === 'image'){
+      card = Object.assign(base, { url:'' });
+    } else if(type === 'todo'){
+      card = Object.assign(base, { title:'', items: [] });
+    } else if(type === 'board'){
+      const refId = uid();
+      boards.push({id: refId, name:'Unterboard', createdAt: Date.now(), parentId: currentBoardId});
+      await safeSet('boards', JSON.stringify(boards));
+      await safeSet('board-data:'+refId, JSON.stringify({cards:[], connections:[]}));
+      card = Object.assign(base, { title:'Unterboard', refBoardId: refId });
+    }
+    cards.push(card);
+    scheduleSave();
+    renderCards();
+  }
+
+  document.getElementById('addNoteBtn').addEventListener('click', () => addCard('note'));
+  document.getElementById('addTodoBtn').addEventListener('click', () => addCard('todo'));
+  document.getElementById('addLinkBtn').addEventListener('click', () => addCard('link'));
+  document.getElementById('addImageBtn').addEventListener('click', () => addCard('image'));
+  document.getElementById('addBoardBtn').addEventListener('click', () => addCard('board'));
+
+  document.getElementById('connectBtn').addEventListener('click', () => {
+    connectMode = !connectMode;
+    connectFirstId = null;
+    updateConnectUI();
+    renderCards();
+  });
+  function updateConnectUI(){
+    document.getElementById('connectBtn').classList.toggle('active', connectMode);
+    connectHintEl.classList.toggle('show', connectMode);
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', async () => {
+    if(typeof html2canvas === 'undefined'){ alert('Export-Bibliothek konnte nicht geladen werden.'); return; }
+    const btn = document.getElementById('exportBtn');
+    const oldText = btn.textContent;
+    btn.textContent = '⏳ Export läuft...';
+    try{
+      const canvasImg = await html2canvas(canvasEl, { backgroundColor: '#EEF1EE', scale: 1 });
+      const link = document.createElement('a');
+      const board = boards.find(b => b.id === currentBoardId);
+      link.download = (board ? board.name : 'pinnwand').replace(/[^a-z0-9äöüß _-]/gi,'').trim() + '.png';
+      link.href = canvasImg.toDataURL('image/png');
+      link.click();
+    }catch(e){ alert('Export fehlgeschlagen.'); }
+    btn.textContent = oldText;
+  });
+
+  function updateZoomUI(){
+    canvasEl.style.transform = `scale(${zoom})`;
+    document.getElementById('zoomLevel').textContent = Math.round(zoom*100) + '%';
+    renderConnections();
+  }
+  document.getElementById('zoomIn').addEventListener('click', () => { zoom = Math.min(2, +(zoom+0.1).toFixed(2)); updateZoomUI(); });
+  document.getElementById('zoomOut').addEventListener('click', () => { zoom = Math.max(0.4, +(zoom-0.1).toFixed(2)); updateZoomUI(); });
+
+  function cardMatchesSearch(card){
+    if(!searchTerm) return true;
+    const t = searchTerm;
+    if(card.type === 'note') return (card.content||'').toLowerCase().replace(/<[^>]+>/g,' ').includes(t);
+    if(card.type === 'link') return (card.title||'').toLowerCase().includes(t) || (card.url||'').toLowerCase().includes(t);
+    if(card.type === 'todo') return (card.title||'').toLowerCase().includes(t) || (card.items||[]).some(i => i.text.toLowerCase().includes(t));
+    if(card.type === 'board') return (card.title||'').toLowerCase().includes(t);
+    if(card.type === 'image') return (card.url||'').toLowerCase().includes(t);
+    return true;
+  }
+
+  function renderAll(){ renderCards(); }
+
+  function renderCards(){
+    canvasEl.querySelectorAll('.card').forEach(n => n.remove());
+    emptyHintEl.style.display = cards.length ? 'none' : 'block';
+    cards.forEach(renderCard);
+    renderConnections();
+  }
+
+  function renderCard(card){
+    const el = document.createElement('div');
+    el.className = 'card ' + (card.type === 'board' ? 'board-card' : card.type);
+    el.style.left = card.x + 'px';
+    el.style.top = card.y + 'px';
+    el.style.transform = `rotate(${card.rotation || 0}deg)`;
+    el.dataset.id = card.id;
+    if(!cardMatchesSearch(card)) el.classList.add('dimmed');
+    if(connectMode && connectFirstId === card.id) el.classList.add('connect-target');
+
+    const head = document.createElement('div');
+    head.className = 'card-head';
+    if(card.type === 'note'){ head.innerHTML = '<span class="pin"></span>'; }
+    const delBtn = document.createElement('button');
+    delBtn.className = 'card-delete';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Löschen';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cards = cards.filter(c => c.id !== card.id);
+      connections = connections.filter(c => c.from !== card.id && c.to !== card.id);
+      scheduleSave();
+      renderCards();
+    });
+    head.appendChild(delBtn);
+    el.appendChild(head);
+
+    if(card.type === 'note'){
+      el.style.background = card.color;
+
+      const toolbar = document.createElement('div');
+      toolbar.className = 'note-toolbar';
+      [['B','bold'],['I','italic'],['U','underline'],['•','insertUnorderedList']].forEach(([label,cmd]) => {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.style.fontStyle = cmd==='italic' ? 'italic':'normal';
+        b.style.textDecoration = cmd==='underline' ? 'underline':'none';
+        b.addEventListener('mousedown', (e) => { e.preventDefault(); document.execCommand(cmd,false,null); body.dispatchEvent(new Event('input')); });
+        toolbar.appendChild(b);
+      });
+      el.appendChild(toolbar);
+
+      const body = document.createElement('div');
+      body.className = 'note-body';
+      body.contentEditable = 'true';
+      body.spellcheck = false;
+      body.innerHTML = card.content || '';
+      body.addEventListener('input', () => { card.content = body.innerHTML; scheduleSave(); });
+      el.appendChild(body);
+
+      const colorRow = document.createElement('div');
+      colorRow.className = 'color-row';
+      NOTE_COLORS.forEach(c => {
+        const dot = document.createElement('button');
+        dot.className = 'color-dot';
+        dot.style.background = c;
+        dot.title = 'Farbe ändern';
+        dot.addEventListener('click', () => { card.color = c; el.style.background = c; scheduleSave(); });
+        colorRow.appendChild(dot);
+      });
+      el.appendChild(colorRow);
+    }
+
+    else if(card.type === 'link'){
+      const body = document.createElement('div');
+      body.className = 'link-body';
+      const title = document.createElement('div');
+      title.className = 'link-title';
+      title.contentEditable = 'true';
+      title.spellcheck = false;
+      title.textContent = card.title || '';
+      title.addEventListener('input', () => { card.title = title.textContent; scheduleSave(); });
+      body.appendChild(title);
+
+      const urlInput = document.createElement('input');
+      urlInput.className = 'link-url-input';
+      urlInput.placeholder = 'https://...';
+      urlInput.value = card.url || '';
+      urlInput.addEventListener('change', () => { card.url = urlInput.value.trim(); scheduleSave(); renderCards(); });
+      body.appendChild(urlInput);
+
+      if(card.url){
+        const a = document.createElement('a');
+        a.className = 'link-open';
+        a.href = /^https?:\/\//i.test(card.url) ? card.url : 'https://' + card.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = 'Öffnen ↗';
+        body.appendChild(a);
+      }
+      el.appendChild(body);
+    }
+
+    else if(card.type === 'image'){
+      const body = document.createElement('div');
+      body.className = 'image-body';
+      if(card.url){
+        const img = document.createElement('img');
+        img.src = card.url;
+        img.alt = '';
+        img.onerror = () => { img.replaceWith(makePlaceholder('Bild konnte nicht geladen werden')); };
+        body.appendChild(img);
+      } else {
+        body.appendChild(makePlaceholder('Bild-URL unten eintragen'));
+      }
+      const urlInput = document.createElement('input');
+      urlInput.className = 'image-url-input';
+      urlInput.placeholder = 'Bild-URL einfügen...';
+      urlInput.value = card.url || '';
+      urlInput.addEventListener('change', () => { card.url = urlInput.value.trim(); scheduleSave(); renderCards(); });
+      body.appendChild(urlInput);
+      el.appendChild(body);
+    }
+
+    else if(card.type === 'todo'){
+      const body = document.createElement('div');
+      body.className = 'todo-body';
+      const title = document.createElement('div');
+      title.className = 'todo-title';
+      title.contentEditable = 'true';
+      title.spellcheck = false;
+      title.textContent = card.title || '';
+      title.addEventListener('input', () => { card.title = title.textContent; scheduleSave(); });
+      body.appendChild(title);
+
+      (card.items || []).forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'todo-item' + (item.done ? ' done' : '');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!item.done;
+        cb.addEventListener('change', () => { item.done = cb.checked; row.classList.toggle('done', item.done); scheduleSave(); });
+        row.appendChild(cb);
+        const txt = document.createElement('div');
+        txt.className = 'item-text';
+        txt.contentEditable = 'true';
+        txt.spellcheck = false;
+        txt.textContent = item.text || '';
+        txt.addEventListener('input', () => { item.text = txt.textContent; scheduleSave(); });
+        row.appendChild(txt);
+        const del = document.createElement('button');
+        del.className = 'item-del';
+        del.textContent = '✕';
+        del.addEventListener('click', () => {
+          card.items = card.items.filter(i => i.id !== item.id);
+          scheduleSave();
+          renderCards();
+        });
+        row.appendChild(del);
+        body.appendChild(row);
+      });
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'todo-add';
+      addBtn.textContent = '+ Eintrag';
+      addBtn.addEventListener('click', () => {
+        card.items = card.items || [];
+        card.items.push({id: uid(), text:'', done:false});
+        scheduleSave();
+        renderCards();
+      });
+      body.appendChild(addBtn);
+      el.appendChild(body);
+    }
+
+    else if(card.type === 'board'){
+      const body = document.createElement('div');
+      body.className = 'board-card-body';
+      body.innerHTML = '<div class="board-card-icon">🗂️</div>';
+      const title = document.createElement('div');
+      title.className = 'board-card-title';
+      title.contentEditable = 'true';
+      title.spellcheck = false;
+      title.textContent = card.title || '';
+      title.addEventListener('click', (e) => e.stopPropagation());
+      title.addEventListener('input', () => {
+        card.title = title.textContent;
+        const b = boards.find(x => x.id === card.refBoardId);
+        if(b){ b.name = title.textContent.trim() || 'Unterboard'; safeSet('boards', JSON.stringify(boards)); }
+        scheduleSave();
+      });
+      body.appendChild(title);
+      const sub = document.createElement('div');
+      sub.className = 'board-card-sub';
+      sub.textContent = 'Doppelklick zum Öffnen';
+      body.appendChild(sub);
+      body.addEventListener('dblclick', () => {
+        boardStack.push(card.refBoardId);
+        switchBoard(card.refBoardId);
+      });
+      el.appendChild(body);
+    }
+
+    el.addEventListener('click', () => {
+      if(!connectMode) return;
+      if(connectFirstId === null){
+        connectFirstId = card.id;
+        renderCards();
+      } else if(connectFirstId !== card.id){
+        connections.push({id: uid(), from: connectFirstId, to: card.id});
+        connectMode = false;
+        connectFirstId = null;
+        updateConnectUI();
+        scheduleSave();
+        renderCards();
+      }
+    });
+
+    attachDrag(el, card);
+    canvasEl.appendChild(el);
+  }
+
+  function makePlaceholder(text){
+    const d = document.createElement('div');
+    d.className = 'image-placeholder';
+    d.textContent = text;
+    return d;
+  }
+
+  function cardCenter(card){
+    const el = canvasEl.querySelector(`.card[data-id="${card.id}"]`);
+    const w = el ? el.offsetWidth : 200;
+    const h = el ? el.offsetHeight : 100;
+    return { x: card.x + w/2, y: card.y + h/2 };
+  }
+
+  function renderConnections(){
+    svgEl.querySelectorAll('line').forEach(l => l.remove());
+    connections.forEach(conn => {
+      const fromCard = cards.find(c => c.id === conn.from);
+      const toCard = cards.find(c => c.id === conn.to);
+      if(!fromCard || !toCard) return;
+      const p1 = cardCenter(fromCard);
+      const p2 = cardCenter(toCard);
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', p1.x);
+      line.setAttribute('y1', p1.y);
+      line.setAttribute('x2', p2.x);
+      line.setAttribute('y2', p2.y);
+      line.setAttribute('stroke', '#8FA39C');
+      line.setAttribute('stroke-width', '2.5');
+      line.setAttribute('marker-end', 'url(#arrowhead)');
+      line.style.pointerEvents = 'stroke';
+      line.addEventListener('click', () => {
+        connections = connections.filter(c => c.id !== conn.id);
+        scheduleSave();
+        renderConnections();
+      });
+      const title = document.createElementNS('http://www.w3.org/2000/svg','title');
+      title.textContent = 'Klicken zum Entfernen';
+      line.appendChild(title);
+      svgEl.appendChild(line);
+    });
+  }
+
+  function attachDrag(el, card){
+    const handle = el.querySelector('.card-head');
+    handle.addEventListener('pointerdown', (e) => {
+      if(e.target.classList.contains('card-delete')) return;
+      if(connectMode) return;
+      e.preventDefault();
+      const startX = e.clientX, startY = e.clientY;
+      const startLeft = card.x, startTop = card.y;
+      el.classList.add('dragging');
+      function onMove(ev){
+        const dx = (ev.clientX - startX) / zoom;
+        const dy = (ev.clientY - startY) / zoom;
+        card.x = startLeft + dx;
+        card.y = startTop + dy;
+        el.style.left = card.x + 'px';
+        el.style.top = card.y + 'px';
+        renderConnections();
+      }
+      function onUp(){
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        el.classList.remove('dragging');
+        scheduleSave();
+      }
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
+  }
+
+  document.getElementById('sidebarToggle').addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('open');
+  });
+
+  document.getElementById('driveConnectBtn').addEventListener('click', () => {
+    if(driveConnected) disconnectDrive();
+    else connectDrive();
+  });
+
+  document.getElementById('exportDataBtn').addEventListener('click', exportAllData);
+  document.getElementById('importDataBtn').addEventListener('click', () => {
+    document.getElementById('importFileInput').click();
+  });
+  document.getElementById('importFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(file) importAllData(file);
+    e.target.value = '';
+  });
+  document.getElementById('storageModeLabel').textContent =
+    storageMode === 'claude' ? 'Speicherort: Claude-Chat' : 'Speicherort: dieser Browser';
+
+  loadBoards();
+  initDrive();
+})();
+</script>
+</body>
+</html>
