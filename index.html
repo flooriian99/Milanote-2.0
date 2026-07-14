@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --paper: #EEF1EE;
@@ -581,8 +580,8 @@
   <ul id="boardList"></ul>
 
   <div id="driveBox" style="border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:10px;font-size:12.5px;">
-    <div id="driveStatus" style="color:var(--sidebar-text-dim);margin-bottom:8px;">Nicht mit Google Drive verbunden</div>
-    <button id="driveConnectBtn" class="tool-btn" style="width:100%;background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:var(--sidebar-text);">🔗 Mit Google Drive verbinden</button>
+    <div id="driveStatus" style="color:var(--sidebar-text-dim);margin-bottom:8px;">Nicht verbunden</div>
+    <button id="driveConnectBtn" class="tool-btn" style="width:100%;background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:var(--sidebar-text);">🔗 Sync verbinden</button>
     <button id="driveDisconnectBtn" class="tool-btn" style="width:100%;background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:var(--sidebar-text);display:none;">Trennen</button>
   </div>
 
@@ -771,16 +770,10 @@
     }
   }
 
-  // ---- Google Drive Sync ----
-  // Setup-Anleitung siehe Chat. Client-ID unten eintragen, sonst bleibt der
-  // Connect-Button inaktiv und die App läuft normal lokal weiter.
-  const GOOGLE_CLIENT_ID = '89025374068-td806rb0r3jb8o3as963t499782nqg4i.apps.googleusercontent.com';
-  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-  const DRIVE_FILENAME = 'pinnwand-data.json';
-
-  let driveAccessToken = null;
-  let driveFileId = localStorage.getItem('pinnwand:driveFileId') || null;
-  let driveTokenClient = null;
+  // ---- Sync via Google Apps Script (kein Login nötig) ----
+  // Einrichtung siehe Chat: Apps Script Web-App URL unten einmal eintragen
+  // (oder über den Knopf in der Seitenleiste einfügen — wird lokal gespeichert).
+  let appsScriptUrl = localStorage.getItem('pinnwand:appsScriptUrl') || '';
   let driveConnected = localStorage.getItem('pinnwand:driveConnected') === 'true';
   let driveSyncTimer = null;
 
@@ -793,68 +786,23 @@
     document.getElementById('driveDisconnectBtn').style.display = driveConnected ? 'block' : 'none';
   }
 
-  function initDriveTokenClient(){
-    if(typeof google === 'undefined' || !google.accounts) return null;
-    return google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: DRIVE_SCOPE,
-      callback: ''
-    });
+  async function appsScriptGet(){
+    const res = await fetch(appsScriptUrl);
+    if(!res.ok) throw new Error('Abruf fehlgeschlagen');
+    const json = await res.json();
+    if(json.error) throw new Error(json.error);
+    return json;
   }
-  function requestDriveToken(promptMode){
-    return new Promise((resolve, reject) => {
-      if(!driveTokenClient) driveTokenClient = initDriveTokenClient();
-      if(!driveTokenClient){ reject(new Error('Google-Bibliothek nicht geladen')); return; }
-      driveTokenClient.callback = (resp) => {
-        if(resp.error){ reject(resp); return; }
-        driveAccessToken = resp.access_token;
-        resolve(resp.access_token);
-      };
-      driveTokenClient.requestAccessToken({ prompt: promptMode });
-    });
-  }
-
-  function buildMultipartBody(metadata, content){
-    const boundary = 'pinnwandboundary';
-    const delimiter = "\r\n--" + boundary + "\r\n";
-    const closeDelim = "\r\n--" + boundary + "--";
-    return delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(metadata) +
-      delimiter + 'Content-Type: application/json\r\n\r\n' + content + closeDelim;
-  }
-
-  async function driveFindOrCreateFile(){
-    const q = encodeURIComponent(`name='${DRIVE_FILENAME}' and trashed=false`);
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name)`, {
-      headers: { Authorization: 'Bearer ' + driveAccessToken }
-    });
-    const data = await res.json();
-    if(data.files && data.files.length > 0){
-      driveFileId = data.files[0].id;
-    } else {
-      const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'multipart/related; boundary=pinnwandboundary' },
-        body: buildMultipartBody({name: DRIVE_FILENAME, mimeType:'application/json'}, JSON.stringify({boards:[], boardData:{}}))
-      });
-      const createData = await createRes.json();
-      driveFileId = createData.id;
-    }
-    localStorage.setItem('pinnwand:driveFileId', driveFileId);
-  }
-
-  async function driveDownload(){
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`, {
-      headers: { Authorization: 'Bearer ' + driveAccessToken }
-    });
-    if(!res.ok) throw new Error('Download fehlgeschlagen');
-    return await res.json();
-  }
-  async function driveUpload(dataObj){
-    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`, {
-      method: 'PATCH',
-      headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
+  async function appsScriptPost(dataObj){
+    const res = await fetch(appsScriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(dataObj)
     });
+    if(!res.ok) throw new Error('Speichern fehlgeschlagen');
+    const json = await res.json();
+    if(json.error) throw new Error(json.error);
+    return json;
   }
 
   async function gatherAllData(){
@@ -874,32 +822,36 @@
   }
 
   function scheduleDriveSync(){
-    if(!driveConnected || !driveAccessToken || !driveFileId) return;
+    if(!driveConnected || !appsScriptUrl) return;
     clearTimeout(driveSyncTimer);
     driveSyncTimer = setTimeout(async () => {
       try{
         const data = await gatherAllData();
-        await driveUpload(data);
+        await appsScriptPost(data);
         setDriveStatus('Verbunden — zuletzt synchronisiert ' + new Date().toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'}));
-      }catch(e){ console.error('Drive-Sync fehlgeschlagen', e); setDriveStatus('Sync fehlgeschlagen — erneut versuchen'); }
+      }catch(e){ console.error('Sync fehlgeschlagen', e); setDriveStatus('Sync fehlgeschlagen — erneut versuchen'); }
     }, 1200);
   }
 
-  async function connectDrive(promptMode, silent){
-    if(GOOGLE_CLIENT_ID.indexOf('PASTE_YOUR_CLIENT_ID_HERE') === 0){
-      if(!silent) setDriveStatus('Noch keine Client-ID eingetragen (siehe Anleitung)');
-      return;
+  async function connectDrive(silent){
+    if(!appsScriptUrl){
+      if(!silent){
+        const url = prompt('Apps-Script Web-App-URL einfügen (endet auf /exec und enthält ?key=...):');
+        if(!url) return;
+        appsScriptUrl = url.trim();
+        localStorage.setItem('pinnwand:appsScriptUrl', appsScriptUrl);
+      } else {
+        return;
+      }
     }
     try{
       if(!silent) setDriveStatus('Verbinde...');
-      await requestDriveToken(promptMode);
-      await driveFindOrCreateFile();
-      const remoteData = await driveDownload();
+      const remoteData = await appsScriptGet();
       if(remoteData && remoteData.boards && remoteData.boards.length){
         await applyDataFromDrive(remoteData);
       } else {
         const localData = await gatherAllData();
-        await driveUpload(localData);
+        await appsScriptPost(localData);
       }
       driveConnected = true;
       localStorage.setItem('pinnwand:driveConnected','true');
@@ -907,36 +859,25 @@
       boardStack = [topLevelBoards()[0].id];
       renderBoardList();
       switchBoard(boardStack[0]);
-      setDriveStatus('Verbunden mit Google Drive');
+      setDriveStatus('Verbunden — synct automatisch');
     }catch(e){
       console.error(e);
-      if(silent){
-        setDriveStatus('Automatisch verbinden nicht möglich — bitte einmal klicken');
-      } else {
-        setDriveStatus('Verbindung fehlgeschlagen — nochmal versuchen');
-      }
+      setDriveStatus(silent ? 'Automatische Verbindung fehlgeschlagen — bitte klicken' : 'Verbindung fehlgeschlagen — URL prüfen');
     }
   }
-  document.getElementById('driveConnectBtn').addEventListener('click', () => connectDrive('consent', false));
+  document.getElementById('driveConnectBtn').addEventListener('click', () => connectDrive(false));
   document.getElementById('driveDisconnectBtn').addEventListener('click', disconnectDrive);
 
   async function attemptSilentDriveReconnect(){
-    if(!driveConnected) return;
-    // Give the Google script a moment to finish loading before trying.
-    let tries = 0;
-    while(typeof google === 'undefined' && tries < 20){
-      await new Promise(r => setTimeout(r, 250));
-      tries++;
-    }
-    connectDrive('none', true);
+    if(!driveConnected || !appsScriptUrl) return;
+    connectDrive(true);
   }
 
   function disconnectDrive(){
     driveConnected = false;
-    driveAccessToken = null;
     localStorage.setItem('pinnwand:driveConnected','false');
     updateDriveUI();
-    setDriveStatus('Nicht mit Google Drive verbunden');
+    setDriveStatus('Nicht verbunden');
   }
 
   async function loadBoards(){
@@ -1209,6 +1150,35 @@
       e.preventDefault();
       undo();
     }
+  });
+
+  document.addEventListener('paste', async (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    let imageFile = null;
+    for(const item of items){
+      if(item.type.indexOf('image') === 0){ imageFile = item.getAsFile(); break; }
+    }
+    if(!imageFile) return; // no image in clipboard — let normal text paste behave as usual
+    e.preventDefault();
+    try{
+      const dataUrl = await compressImageFile(imageFile);
+      // If an existing image card is selected, replace its picture...
+      const selected = cards.find(c => c.id === selectedCardId && c.type === 'image');
+      if(selected){
+        selected.url = dataUrl;
+        scheduleSave();
+        renderCards();
+        return;
+      }
+      // ...otherwise create a new image card with the pasted picture.
+      pushHistory();
+      const pos = viewportCenterOnCanvas();
+      const card = { id: uid(), type:'image', x: pos.x, y: pos.y, rotation:0, url: dataUrl, tags: [] };
+      cards.push(card);
+      scheduleSave();
+      renderCards();
+    }catch(err){ console.error('Bild aus Zwischenablage fehlgeschlagen', err); }
   });
 
   function cardMatchesSearch(card){
